@@ -1,0 +1,100 @@
+---
+# ConfigMap - Configuration for Valkey MCP Server
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: valkey-mcp-config
+  labels:
+    app: valkey-mcp-server
+data:
+  VALKEY_URL: "valkey://valkey-service:6379"
+  VALKEY_DB: "0"
+  VALKEY_PASSWORD: ""
+
+---
+# Deployment - Valkey MCP Server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: valkey-mcp-server
+  labels:
+    app: valkey-mcp-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: valkey-mcp-server
+  template:
+    metadata:
+      labels:
+        app: valkey-mcp-server
+      annotations:
+        # Force rollout on ConfigMap changes
+        configmap/checksum: "update-me-to-force-rollout"
+    spec:
+      containers:
+        - name: valkey-mcp-server
+          image: ghcr.io/itsjool/valkey-mcp-server:latest
+          imagePullPolicy: IfNotPresent
+
+          # Environment variables from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: valkey-mcp-config
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - "pgrep -f server"
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+# Service - ClusterIP for internal access
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-mcp-service
+  labels:
+    app: valkey-mcp-server
+spec:
+  type: ClusterIP
+  selector:
+    app: valkey-mcp-server
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+
+---
+# Service - NodePort for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: valkey-mcp-nodeport
+  labels:
+    app: valkey-mcp-server
+spec:
+  type: NodePort
+  selector:
+    app: valkey-mcp-server
+  ports:
+    - name: mcp
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080
+      protocol: TCP

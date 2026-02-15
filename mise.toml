@@ -1,0 +1,215 @@
+# Install mise: https://mise.jdx.dev/installing-mise.html
+
+[env]
+# Set default environment variables
+BINARY_NAME = "valkey-mcp-server"
+COVERAGE_FILE = "coverage.out"
+COVERAGE_HTML = "coverage.html"
+DOCKER_IMAGE = "ghcr.io/itsjool/valkey-mcp-server"
+DOCKER_TAG = "latest"
+VERSION = "1.0.0"
+K8S_MANIFEST = "k8s/valkey-mcp-server.yaml"
+
+
+[tools]
+go = "1.22"
+podman = "latest"
+kubectl = "latest"
+golangci-lint = "latest"
+
+
+[tools."http:valkey"]
+version = "9.0.2"
+
+[tools."http:valkey".platforms.linux-x64]
+url = "https://download.valkey.io/releases/valkey-{{version}}-noble-x86_64.tar.gz"
+bin_path = "valkey-{{version}}-noble-x86_64/bin"
+
+[tools."http:valkey".platforms.linux-arm64]
+url = "https://download.valkey.io/releases/valkey-{{version}}-noble-arm64.tar.gz"
+bin_path = "valkey-{{version}}-noble-arm64/bin"
+
+[shell_alias] 
+docker="podman"
+[tasks]
+help = "mise task ls"
+
+# Build tasks
+build = { description = "Build the binary", run = """
+echo "Building $BINARY_NAME..."
+go build -o $BINARY_NAME ./cmd/valkey-mcp-server
+echo "Build complete: $BINARY_NAME"
+""" }
+
+install = { description = "Install the binary to $GOPATH/bin", run = """
+echo "Installing $BINARY_NAME..."
+go install ./cmd/valkey-mcp-server
+echo "Installed to $(go env GOPATH)/bin/$BINARY_NAME"
+""" }
+
+# Test tasks
+test = { description = "Run all tests with clean output", run = """
+echo "Running tests..."
+go test ./... -count=1 2>&1 | grep -v "^===" | grep -E '^(ok|FAIL|PASS|--- FAIL|[?])' || true
+echo ""
+echo "Test Summary:"
+go test ./... -count=1 2>&1 | grep "^ok" | wc -l | xargs echo "  Passed:"
+go test ./... -count=1 2>&1 | grep "^FAIL" | wc -l | xargs echo "  Failed:"
+""" }
+
+test-unit = { description = "Run unit tests only", run = """
+echo "Running unit tests..."
+go test ./internal/registry ./internal/types ./internal/tools/... -short -count=1 2>&1 | grep -v "^===" | grep -E '^(ok|FAIL|[?])' || true
+""" }
+
+test-integration = { description = "Run integration tests (requires Valkey on localhost:6379)", run = """
+echo "Running integration tests (requires Valkey on localhost:6379)..."
+go test ./internal/tools -run TestIntegration -count=1 2>&1 | grep -v "^===" | grep -v "^---" | grep -E "(^PASS|^FAIL|integration tests passed|^ok)" || true
+""" }
+
+test-verbose = { description = "Run tests with full verbose output", run = """
+go test ./... -v -count=1
+""" }
+
+test-coverage = { description = "Run tests with coverage report", run = """
+echo "Running tests with coverage..."
+go test ./... -coverprofile=$COVERAGE_FILE -count=1 > /dev/null 2>&1
+echo ""
+echo "Coverage Summary:"
+go tool cover -func=$COVERAGE_FILE | grep total | awk '{print "  Total Coverage: " $$3}'
+echo ""
+echo "Detailed Coverage:"
+go tool cover -func=$COVERAGE_FILE | grep -E "internal/(registry|types|tools)" | awk '{printf "  %-50s %s\n", $$1, $$3}'
+echo ""
+echo "Coverage report saved to $COVERAGE_FILE"
+echo "Run 'mise task coverage-html' to view in browser"
+""" }
+
+coverage-html = { description = "Generate HTML coverage report", run = """
+go tool cover -html=$COVERAGE_FILE -o $COVERAGE_HTML
+echo "HTML coverage report: $COVERAGE_HTML"
+""", depends = ["test-coverage"] }
+
+# Code quality tasks
+lint = { description = "Run linters", run = """
+echo "Running linters..."
+if command -v golangci-lint >/dev/null 2>&1; then
+    golangci-lint run ./...
+else
+    echo "golangci-lint not installed. Run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+    go vet ./...
+fi
+""" }
+
+fmt = { description = "Format code with gofmt", run = """
+echo "Formatting code..."
+go fmt ./...
+echo "Code formatted"
+""" }
+
+clean = { description = "Remove build artifacts", run = """
+echo "Cleaning..."
+rm -f $BINARY_NAME
+rm -f $COVERAGE_FILE
+rm -f $COVERAGE_HTML
+echo "Clean complete"
+""" }
+
+# Utility tasks
+run = { description = "Run the server (requires Valkey connection)", run = """
+echo "Starting $BINARY_NAME..."
+./$BINARY_NAME
+""", depends = ["build"] }
+
+check = { description = "Quick check - build and test", run = "", depends = ["build", "test"] }
+
+# Docker tasks (using podman via docker alias)
+docker-build = { description = "Build Docker image with podman", run = """
+echo "Building Docker image $DOCKER_IMAGE..."
+echo "  → Latest: $DOCKER_IMAGE:latest"
+echo "  → Version: $DOCKER_IMAGE:$VERSION"
+podman build -t $DOCKER_IMAGE:latest -t $DOCKER_IMAGE:$VERSION .
+echo "Docker image built successfully"
+""" }
+
+docker-push = { description = "Build and push Docker image to registry", run = """
+echo "Pushing Docker image $DOCKER_IMAGE..."
+echo "  → Latest: $DOCKER_IMAGE:latest"
+echo "  → Version: $DOCKER_IMAGE:$VERSION"
+podman push $DOCKER_IMAGE:latest
+podman push $DOCKER_IMAGE:$VERSION
+echo "Docker images pushed successfully"
+""", depends = ["docker-build"] }
+
+docker-run = { description = "Run Docker container locally", run = """
+echo "Running Docker container..."
+podman run --rm -it \
+    -e VALKEY_URL=valkey://host.docker.internal:6379 \
+    $DOCKER_IMAGE:latest
+""" }
+
+docker-shell = { description = "Open shell in Docker container", run = """
+echo "Opening shell in Docker container..."
+podman run --rm -it \
+    --entrypoint /bin/sh \
+    $DOCKER_IMAGE:latest
+""" }
+
+# Kubernetes tasks
+k8s-apply = { description = "Deploy to Kubernetes", run = """
+echo "Applying Kubernetes manifest..."
+kubectl apply -f $K8S_MANIFEST
+echo "Waiting for deployment to be ready..."
+kubectl wait --for=condition=available --timeout=60s deployment/valkey-mcp-server || true
+echo ""
+echo "Deployment status:"
+kubectl get pods -l app=valkey-mcp-server
+""" }
+
+k8s-delete = { description = "Delete from Kubernetes", run = """
+echo "Deleting Kubernetes resources..."
+kubectl delete -f $K8S_MANIFEST
+echo "Resources deleted"
+""" }
+
+k8s-restart = { description = "Restart deployment (after config changes)", run = """
+echo "Restarting deployment after ConfigMap changes..."
+kubectl rollout restart deployment/valkey-mcp-server
+echo "Waiting for rollout to complete..."
+kubectl rollout status deployment/valkey-mcp-server
+echo "Rollout complete"
+""" }
+
+k8s-logs = { description = "Show recent Kubernetes logs", run = """
+echo "Fetching logs from valkey-mcp-server pods..."
+kubectl logs -l app=valkey-mcp-server --tail=50
+""" }
+
+k8s-logs-follow = { description = "Follow Kubernetes logs in real-time", run = """
+echo "Following logs from valkey-mcp-server pods..."
+kubectl logs -l app=valkey-mcp-server -f
+""" }
+
+k8s-status = { description = "Show Kubernetes deployment status", run = """
+echo "Kubernetes resources status:"
+echo ""
+echo "Deployments:"
+kubectl get deployment -l app=valkey-mcp-server
+echo ""
+echo "Pods:"
+kubectl get pods -l app=valkey-mcp-server
+echo ""
+echo "Services:"
+kubectl get svc -l app=valkey-mcp-server
+echo ""
+echo "ConfigMap:"
+kubectl get configmap valkey-mcp-config
+""" }
+
+k8s-config-edit = { description = "Edit Kubernetes ConfigMap", run = """
+echo "Opening ConfigMap for editing..."
+kubectl edit configmap valkey-mcp-config
+echo ""
+echo "ConfigMap updated. Run 'mise task k8s-restart' to apply changes."
+""" }
+

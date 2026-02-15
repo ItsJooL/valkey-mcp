@@ -1,0 +1,57 @@
+package sunion_sets
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/ItsJooL/valkey-mcp-server/internal/client"
+	"github.com/ItsJooL/valkey-mcp-server/internal/registry"
+	"github.com/ItsJooL/valkey-mcp-server/internal/tools/base"
+)
+
+type Tool struct {
+	base.BaseTool
+	client client.ValkeyClient
+}
+
+type Input struct {
+	Keys []string `json:"keys" jsonschema:"required,description=Set keys to union"`
+}
+
+type Output struct {
+	Members []string `json:"members"`
+	Count   int64    `json:"count"`
+}
+
+func NewTool(client client.ValkeyClient) registry.Tool {
+	return &Tool{
+		BaseTool: base.NewBaseTool("sunion_sets", "Get the union of multiple sets", Input{}),
+		client:   client,
+	}
+}
+
+func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{}, error) {
+	var params Input
+	if err := t.ParseInput(input, &params); err != nil {
+		return nil, err
+	}
+
+	if len(params.Keys) == 0 {
+		return nil, fmt.Errorf("keys cannot be empty")
+	}
+
+	members, err := t.client.SetUnion(ctx, params.Keys)
+	if err != nil {
+		return nil, fmt.Errorf("set union operation failed: %w", err)
+	}
+
+	return Output{
+		Members: members,
+		Count:   int64(len(members)),
+	}, nil
+}
+
+func Init(reg *registry.ToolRegistry, client client.ValkeyClient) {
+	reg.MustRegister(NewTool(client))
+}
