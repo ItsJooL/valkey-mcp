@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Open shell in Docker container"
+
+echo "Opening shell in Docker container..."
+podman run --rm -it \
+    --entrypoint /bin/sh \
+    $DOCKER_IMAGE:latest

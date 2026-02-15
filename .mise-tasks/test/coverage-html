@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Generate HTML coverage report"
+#MISE depends=["test:coverage"]
+
+go tool cover -html=$COVERAGE_FILE -o $COVERAGE_HTML
+echo "HTML coverage report: $COVERAGE_HTML"

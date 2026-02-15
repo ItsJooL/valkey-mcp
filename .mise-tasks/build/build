@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Build the binary"
+
+echo "Building $BINARY_NAME..."
+go build -o $BINARY_NAME ./cmd/valkey-mcp-server
+echo "Build complete: $BINARY_NAME"

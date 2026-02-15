@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Install the binary to $GOPATH/bin"
+
+echo "Installing $BINARY_NAME..."
+go install ./cmd/valkey-mcp-server
+echo "Installed to $(go env GOPATH)/bin/$BINARY_NAME"

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Run Docker container locally"
+
+echo "Running Docker container..."
+podman run --rm -it \
+    -e VALKEY_URL=valkey://host.docker.internal:6379 \
+    $DOCKER_IMAGE:latest

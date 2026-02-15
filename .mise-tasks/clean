@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Remove build artifacts"
+
+echo "Cleaning..."
+rm -f $BINARY_NAME
+rm -f $COVERAGE_FILE
+rm -f $COVERAGE_HTML
+echo "Clean complete"

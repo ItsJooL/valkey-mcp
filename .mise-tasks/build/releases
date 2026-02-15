@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Build cross-platform release binaries (Windows, Linux, macOS with UPX compression)"
+
+./build.sh "$VERSION"

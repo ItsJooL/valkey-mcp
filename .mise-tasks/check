@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+#MISE description="Quick check - build and test"
+#MISE depends=["build:build", "test:test"]

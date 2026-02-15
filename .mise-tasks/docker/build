@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Build Docker image with podman"
+
+echo "Building Docker image $DOCKER_IMAGE..."
+echo "  Latest: $DOCKER_IMAGE:latest"
+echo "  Version: $DOCKER_IMAGE:$VERSION"
+podman build -t $DOCKER_IMAGE:latest -t $DOCKER_IMAGE:$VERSION .
+echo "Docker image built successfully"

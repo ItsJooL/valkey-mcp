@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run integration tests (requires Valkey on localhost:6379)"
+
+echo "Running integration tests (requires Valkey on localhost:6379)..."
+go test ./internal/tools -run TestIntegration -count=1 2>&1 | grep -v "^===" | grep -v "^---" | grep -E "(^PASS|^FAIL|integration tests passed|^ok)" || true

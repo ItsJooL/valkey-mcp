@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Format code with gofmt"
+
+echo "Formatting code..."
+go fmt ./...
+echo "Code formatted"

@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Deploy to Kubernetes"
+
+echo "Applying Kubernetes manifest..."
+kubectl apply -f $K8S_MANIFEST
+echo "Waiting for deployment to be ready..."
+kubectl wait --for=condition=available --timeout=60s deployment/valkey-mcp-server || true
+echo ""
+echo "Deployment status:"
+kubectl get pods -l app=valkey-mcp-server

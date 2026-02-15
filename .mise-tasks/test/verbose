@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+#MISE description="Run tests with full verbose output"
+
+go test ./... -v -count=1

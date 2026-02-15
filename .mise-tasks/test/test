@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+#MISE description="Run all tests with clean output"
+
+echo "Running tests..."
+go test ./... -count=1 2>&1 | grep -v "^===" | grep -E '^(ok|FAIL|PASS|--- FAIL|[?])' || true
+echo ""
+echo "Test Summary:"
+go test ./... -count=1 2>&1 | grep "^ok" | wc -l | xargs echo "  Passed:"
+go test ./... -count=1 2>&1 | grep "^FAIL" | wc -l | xargs echo "  Failed:"

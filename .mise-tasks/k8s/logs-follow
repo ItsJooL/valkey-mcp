@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Follow Kubernetes logs in real-time"
+
+echo "Following logs from valkey-mcp-server pods..."
+kubectl logs -l app=valkey-mcp-server -f

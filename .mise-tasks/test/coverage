@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+#MISE description="Run tests with coverage report"
+
+echo "Running tests with coverage..."
+go test ./... -coverprofile=$COVERAGE_FILE -count=1 > /dev/null 2>&1
+echo ""
+echo "Coverage Summary:"
+go tool cover -func=$COVERAGE_FILE | grep total | awk '{print "  Total Coverage: " $$3}'
+echo ""
+echo "Detailed Coverage:"
+go tool cover -func=$COVERAGE_FILE | grep -E "internal/(registry|types|tools)" | awk '{printf "  %-50s %s\n", $$1, $$3}'
+echo ""
+echo "Coverage report saved to $COVERAGE_FILE"
+echo "Run 'mise task coverage:html' to view in browser"

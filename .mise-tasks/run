@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+#MISE description="Run the server (requires Valkey connection)"
+#MISE depends=["build:build"]
+
+echo "Starting $BINARY_NAME..."
+./$BINARY_NAME

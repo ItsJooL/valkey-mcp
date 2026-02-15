@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Run unit tests only"
+
+echo "Running unit tests..."
+go test ./internal/registry ./internal/types ./internal/tools/... -short -count=1 2>&1 | grep -v "^===" | grep -E '^(ok|FAIL|[?])' || true

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#MISE description="Restart deployment (after config changes)"
+
+echo "Restarting deployment after ConfigMap changes..."
+kubectl rollout restart deployment/valkey-mcp-server
+echo "Waiting for rollout to complete..."
+kubectl rollout status deployment/valkey-mcp-server
+echo "Rollout complete"

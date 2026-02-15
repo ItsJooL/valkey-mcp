@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+#MISE description="Show recent Kubernetes logs"
+
+echo "Fetching logs from valkey-mcp-server pods..."
+kubectl logs -l app=valkey-mcp-server --tail=50

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#MISE description="Edit Kubernetes ConfigMap"
+
+echo "Opening ConfigMap for editing..."
+kubectl edit configmap valkey-mcp-config
+echo ""
+echo "ConfigMap updated. Run 'mise task k8s:restart' to apply changes."

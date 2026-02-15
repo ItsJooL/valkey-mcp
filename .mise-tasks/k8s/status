@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Show Kubernetes deployment status"
+
+echo "Kubernetes resources status:"
+echo ""
+echo "Deployments:"
+kubectl get deployment -l app=valkey-mcp-server
+echo ""
+echo "Pods:"
+kubectl get pods -l app=valkey-mcp-server
+echo ""
+echo "Services:"
+kubectl get svc -l app=valkey-mcp-server
+echo ""
+echo "ConfigMap:"
+kubectl get configmap valkey-mcp-config
