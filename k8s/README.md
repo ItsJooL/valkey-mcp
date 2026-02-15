@@ -15,6 +15,10 @@ Simple Kubernetes deployment for Valkey MCP Server.
 ```bash
 kubectl apply -f k8s/valkey-mcp-server.yaml
 ```
+Or if you do not have the manifest local
+```bash
+kubectl apply -f https://raw.githubusercontent.com/ItsJooL/valkey-mcp/refs/heads/main/k8s/valkey-mcp-server.yaml
+```
 
 This creates:
 - ConfigMap with Valkey connection settings
