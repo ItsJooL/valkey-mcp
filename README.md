@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server for Valkey that provides AI agents like C
 
 ## Features
 
-- **72 Tools** - Comprehensive coverage of Valkey operations (strings, lists, hashes, sets, sorted sets, streams, server admin, cluster management)
+- **70+ Tools** - Comprehensive coverage of Valkey operations (strings, lists, hashes, sets, sorted sets, streams, server admin, cluster management)
 - **Type-safe operations** - Input validation and structured responses
 - **Complete error handling** - Detailed error messages with context
 - **Single binary** - No runtime dependencies (compiled Go binary)
