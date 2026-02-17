@@ -21,8 +21,8 @@ type Input struct {
 }
 
 type Output struct {
-	Key    string            `json:"key"`
-	Result map[string]string `json:"result"`
+	Key    string         `json:"key"`
+	Result map[string]any `json:"result"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -51,7 +51,7 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("operation failed: %w", err)
 	}
 
-	return Output{Key: params.Key, Result: result}, nil
+	return Output{Key: params.Key, Result: base.SafeMap(result)}, nil
 }
 
 func Init(reg *registry.ToolRegistry, client client.ValkeyClient) {

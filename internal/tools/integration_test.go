@@ -3,6 +3,7 @@ package tools
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/ItsJooL/valkey-mcp-server/internal/client"
 	"github.com/ItsJooL/valkey-mcp-server/internal/registry"
 	"github.com/ItsJooL/valkey-mcp-server/internal/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -185,4 +187,95 @@ func TestIntegrationBasicToolsWithLiveValkey(t *testing.T) {
 	})
 
 	t.Logf("All integration tests passed")
+}
+
+// TestIntegration_BinaryHashFields_RoundTrip verifies that binary hash field values
+// (e.g. Java-serialised POJOs stored by Redisson) are preserved without corruption
+// through the full MCP retrieval path.
+func TestIntegration_BinaryHashFields_RoundTrip(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	url, err := types.NewValkeyURL("valkey://localhost:6379")
+	require.NoError(t, err)
+
+	valkeyClient, err := client.New(ctx, client.Config{URL: url})
+	if err != nil {
+		t.Skipf("Skipping integration test: Valkey not available: %v", err)
+	}
+	defer valkeyClient.Close()
+
+	reg := registry.NewToolRegistry()
+	RegisterAll(reg, valkeyClient)
+
+	// Known binary payloads — deliberately not valid UTF-8
+	// javaSerialised simulates a Redisson-serialised Java object (POJO)
+	javaSerialised := []byte{
+		0xAC, 0xED, 0x00, 0x05, 0x73, 0x72, 0x00, 0x13,
+		0x63, 0x6F, 0x6D, 0x2E, 0x65, 0x78, 0x61, 0x6D,
+		0x70, 0x6C, 0x65, 0x2E, 0x55, 0x73, 0x65, 0x72,
+		0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05,
+	}
+	// protobuf simulates a Protocol Buffer encoded message
+	protobuf := []byte{
+		0x08, 0x96, 0x01, 0x12, 0x07, 0x74, 0x65, 0x73,
+		0x74, 0x69, 0x6E, 0x67, 0xFF, 0xFE, 0xFD,
+	}
+	plainText := "John Doe"
+
+	const testKey = "integration_test:binary_hash"
+
+	t.Cleanup(func() {
+		valkeyClient.DeleteKey(ctx, testKey) //nolint:errcheck
+	})
+	valkeyClient.DeleteKey(ctx, testKey) //nolint:errcheck
+
+	// Store binary data via SetMap; Go string preserves raw bytes through valkey-go
+	_, err = valkeyClient.SetMap(ctx, testKey, map[string]string{
+		"java_pojo": string(javaSerialised),
+		"proto_msg": string(protobuf),
+		"name":      plainText,
+	})
+	require.NoError(t, err, "failed to store binary hash data in Valkey")
+
+	// Retrieve via the get_hash tool
+	inputJSON, _ := json.Marshal(map[string]interface{}{"key": testKey})
+	result, err := reg.ExecuteTool(ctx, "get_hash", inputJSON)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+
+	jsonBytes, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	var jsonResult map[string]interface{}
+	require.NoError(t, json.Unmarshal(jsonBytes, &jsonResult))
+
+	fields, ok := jsonResult["fields"].(map[string]interface{})
+	require.True(t, ok, "response should have fields map")
+
+	// "name" must be a plain JSON string
+	nameVal, ok := fields["name"].(string)
+	require.True(t, ok, "name field should be a plain string")
+	assert.Equal(t, "John Doe", nameVal)
+
+	// "java_pojo" must be a base64 string that decodes back to original bytes exactly
+	javaEncoded, ok := fields["java_pojo"].(string)
+	require.True(t, ok, "java_pojo field should be a string (base64)")
+	javaDecoded, err := base64.StdEncoding.DecodeString(javaEncoded)
+	require.NoError(t, err, "java_pojo should be valid base64")
+	assert.Equal(t, javaSerialised, javaDecoded,
+		"java_pojo decoded bytes must be identical to original — binary data must not be corrupted")
+
+	// "proto_msg" must be a base64 string that decodes back to original bytes exactly
+	protoEncoded, ok := fields["proto_msg"].(string)
+	require.True(t, ok, "proto_msg field should be a string (base64)")
+	protoDecoded, err := base64.StdEncoding.DecodeString(protoEncoded)
+	require.NoError(t, err, "proto_msg should be valid base64")
+	assert.Equal(t, protobuf, protoDecoded,
+		"proto_msg decoded bytes must be identical to original — binary data must not be corrupted")
+
+	t.Logf("Integration test passed: binary hash fields preserved through full MCP retrieval path")
+	t.Logf("  java_pojo: %d bytes stored, %d bytes retrieved", len(javaSerialised), len(javaDecoded))
+	t.Logf("  proto_msg: %d bytes stored, %d bytes retrieved", len(protobuf), len(protoDecoded))
+	t.Logf("  name: stored as text, retrieved as plain string")
 }

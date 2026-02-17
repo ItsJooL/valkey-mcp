@@ -26,9 +26,9 @@ type Input struct {
 
 // Output represents the output of lrange_list tool.
 type Output struct {
-	Key    string   `json:"key"`
-	Values []string `json:"values"`
-	Count  int      `json:"count"`
+	Key    string `json:"key"`
+	Values []any  `json:"values"`
+	Count  int    `json:"count"`
 }
 
 // NewTool creates a new lrange_list tool.
@@ -53,15 +53,15 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("key cannot be empty")
 	}
 
-	values, err := t.client.GetListRange(ctx, params.Key, params.Start, params.Stop)
+	raw, err := t.client.GetListRange(ctx, params.Key, params.Start, params.Stop)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list range for key %q: %w", params.Key, err)
 	}
 
 	return Output{
 		Key:    params.Key,
-		Values: values,
-		Count:  len(values),
+		Values: base.SafeSlice(raw),
+		Count:  len(raw),
 	}, nil
 }
 

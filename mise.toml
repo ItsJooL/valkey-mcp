@@ -7,7 +7,7 @@ COVERAGE_FILE = "coverage.out"
 COVERAGE_HTML = "coverage.html"
 DOCKER_IMAGE = "ghcr.io/itsjool/valkey-mcp-server"
 DOCKER_TAG = "latest"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 K8S_MANIFEST = "k8s/valkey-mcp-server.yaml"
 
 

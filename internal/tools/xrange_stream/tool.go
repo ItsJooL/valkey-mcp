@@ -23,8 +23,8 @@ type Input struct {
 }
 
 type Output struct {
-	Entries []map[string]string `json:"entries"`
-	Count   int64               `json:"count"`
+	Entries []map[string]any `json:"entries"`
+	Count   int64            `json:"count"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -52,14 +52,14 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("end cannot be empty")
 	}
 
-	entries, err := t.client.GetStreamRange(ctx, params.Key, params.Start, params.End, params.Count)
+	raw, err := t.client.GetStreamRange(ctx, params.Key, params.Start, params.End, params.Count)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get stream range: %w", err)
 	}
 
 	return Output{
-		Entries: entries,
-		Count:   int64(len(entries)),
+		Entries: base.SafeStreamEntries(raw),
+		Count:   int64(len(raw)),
 	}, nil
 }
 

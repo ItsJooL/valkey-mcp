@@ -109,17 +109,18 @@ func (c *Client) GetServerInfo(ctx context.Context) (map[string]string, error) {
 
 // String operations
 
-func (c *Client) GetString(ctx context.Context, key string) (string, bool, error) {
+func (c *Client) GetString(ctx context.Context, key string) ([]byte, bool, error) {
 	resp := c.client.Do(ctx, c.client.B().Get().Key(key).Build())
 	if err := resp.Error(); err != nil {
-		return "", false, fmt.Errorf("GET failed: %w", err)
+		return nil, false, fmt.Errorf("GET failed: %w", err)
 	}
 
-	val, err := resp.ToString()
+	b, err := resp.AsBytes()
 	if err != nil {
-		return "", false, nil
+		// Key does not exist or nil response
+		return nil, false, nil
 	}
-	return val, true, nil
+	return b, true, nil
 }
 
 func (c *Client) SetString(ctx context.Context, key, value string, ttlSeconds *int64, nx, xx bool) (bool, error) {
@@ -280,28 +281,37 @@ func (c *Client) AppendString(ctx context.Context, key, value string) (int64, er
 	return length, nil
 }
 
-func (c *Client) GetRange(ctx context.Context, key string, start, end int64) (string, error) {
+func (c *Client) GetRange(ctx context.Context, key string, start, end int64) ([]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Getrange().Key(key).Start(start).End(end).Build())
 	if err := resp.Error(); err != nil {
-		return "", fmt.Errorf("GETRANGE failed: %w", err)
+		return nil, fmt.Errorf("GETRANGE failed: %w", err)
 	}
-	val, _ := resp.ToString()
-	return val, nil
+	b, err := resp.AsBytes()
+	if err != nil {
+		return []byte{}, nil
+	}
+	return b, nil
 }
 
-// Hash operations - simplified for now
+// Hash operations
 
-func (c *Client) GetMap(ctx context.Context, key string) (map[string]string, error) {
+func (c *Client) GetMap(ctx context.Context, key string) (map[string][]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Hgetall().Key(key).Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("HGETALL failed: %w", err)
 	}
-	msgMap, _ := resp.AsMap()
-	result := make(map[string]string)
-	for k, v := range msgMap {
-		if s, err := v.ToString(); err == nil {
-			result[k] = s
+	// AsMap handles both RESP2 (flat array) and RESP3 (map) reply formats.
+	m, err := resp.AsMap()
+	if err != nil {
+		return make(map[string][]byte), nil
+	}
+	result := make(map[string][]byte, len(m))
+	for field, msg := range m {
+		val, err := msg.AsBytes() // values may be binary
+		if err != nil {
+			continue
 		}
+		result[field] = val
 	}
 	return result, nil
 }
@@ -330,16 +340,16 @@ func (c *Client) SetMap(ctx context.Context, key string, fields map[string]strin
 	return count, nil
 }
 
-func (c *Client) GetMapField(ctx context.Context, key, field string) (string, bool, error) {
+func (c *Client) GetMapField(ctx context.Context, key, field string) ([]byte, bool, error) {
 	resp := c.client.Do(ctx, c.client.B().Hget().Key(key).Field(field).Build())
 	if err := resp.Error(); err != nil {
-		return "", false, fmt.Errorf("HGET failed: %w", err)
+		return nil, false, fmt.Errorf("HGET failed: %w", err)
 	}
-	val, err := resp.ToString()
+	b, err := resp.AsBytes()
 	if err != nil {
-		return "", false, nil
+		return nil, false, nil
 	}
-	return val, true, nil
+	return b, true, nil
 }
 
 func (c *Client) DeleteMapFields(ctx context.Context, key string, fields []string) (int64, error) {
@@ -366,7 +376,7 @@ func (c *Client) ListMapKeys(ctx context.Context, key string) ([]string, error) 
 	return keys, nil
 }
 
-// List operations - simplified for now
+// List operations
 
 func (c *Client) PushList(ctx context.Context, key string, values []string, tail bool) (int64, error) {
 	if len(values) == 0 {
@@ -392,39 +402,57 @@ func (c *Client) PushList(ctx context.Context, key string, values []string, tail
 	return length, nil
 }
 
-func (c *Client) PopList(ctx context.Context, key string, count int64, tail bool) ([]string, error) {
-	if tail {
-		if count <= 0 {
-			count = 1
-		}
-		builder := c.client.B().Rpop().Key(key).Count(count).Build()
-		resp := c.client.Do(ctx, builder)
-		if err := resp.Error(); err != nil {
-			return nil, fmt.Errorf("RPOP failed: %w", err)
-		}
-		values, _ := resp.AsStrSlice()
-		return values, nil
-	}
-
+func (c *Client) PopList(ctx context.Context, key string, count int64, tail bool) ([][]byte, error) {
 	if count <= 0 {
 		count = 1
 	}
-	builder := c.client.B().Lpop().Key(key).Count(count).Build()
-	resp := c.client.Do(ctx, builder)
-	if err := resp.Error(); err != nil {
-		return nil, fmt.Errorf("LPOP failed: %w", err)
+
+	var resp valkey.ValkeyResult
+	if tail {
+		resp = c.client.Do(ctx, c.client.B().Rpop().Key(key).Count(count).Build())
+		if err := resp.Error(); err != nil {
+			return nil, fmt.Errorf("RPOP failed: %w", err)
+		}
+	} else {
+		resp = c.client.Do(ctx, c.client.B().Lpop().Key(key).Count(count).Build())
+		if err := resp.Error(); err != nil {
+			return nil, fmt.Errorf("LPOP failed: %w", err)
+		}
 	}
-	values, _ := resp.AsStrSlice()
-	return values, nil
+
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
-func (c *Client) GetListRange(ctx context.Context, key string, start, stop int64) ([]string, error) {
+func (c *Client) GetListRange(ctx context.Context, key string, start, stop int64) ([][]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Lrange().Key(key).Start(start).Stop(stop).Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("LRANGE failed: %w", err)
 	}
-	values, _ := resp.AsStrSlice()
-	return values, nil
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 func (c *Client) GetListLength(ctx context.Context, key string) (int64, error) {
@@ -436,7 +464,20 @@ func (c *Client) GetListLength(ctx context.Context, key string) (int64, error) {
 	return length, nil
 }
 
-// Set operations - simplified for now
+func (c *Client) GetListIndex(ctx context.Context, key string, index int64) ([]byte, bool, error) {
+	resp := c.client.Do(ctx, c.client.B().Lindex().Key(key).Index(index).Build())
+	if err := resp.Error(); err != nil {
+		return nil, false, fmt.Errorf("LINDEX failed: %w", err)
+	}
+	b, err := resp.AsBytes()
+	if err != nil {
+		// Index out of range or key does not exist
+		return nil, false, nil
+	}
+	return b, true, nil
+}
+
+// Set operations
 
 func (c *Client) AddSet(ctx context.Context, key string, members []string) (int64, error) {
 	if len(members) == 0 {
@@ -468,13 +509,24 @@ func (c *Client) RemoveSet(ctx context.Context, key string, members []string) (i
 	return count, nil
 }
 
-func (c *Client) ListSetMembers(ctx context.Context, key string) ([]string, error) {
+func (c *Client) ListSetMembers(ctx context.Context, key string) ([][]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Smembers().Key(key).Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("SMEMBERS failed: %w", err)
 	}
-	members, _ := resp.AsStrSlice()
-	return members, nil
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 func (c *Client) CheckSetMember(ctx context.Context, key, member string) (bool, error) {
@@ -514,16 +566,26 @@ func (c *Client) TrimList(ctx context.Context, key string, start, stop int64) (b
 // Ensure Client implements ValkeyClient at compile time
 var _ ValkeyClient = (*Client)(nil)
 
-func (c *Client) GetMapFields(ctx context.Context, key string, fields []string) (map[string]string, error) {
-	result := make(map[string]string)
-	for _, field := range fields {
-		value, exists, err := c.GetMapField(ctx, key, field)
+func (c *Client) GetMapFields(ctx context.Context, key string, fields []string) (map[string][]byte, error) {
+	resp := c.client.Do(ctx, c.client.B().Hmget().Key(key).Field(fields...).Build())
+	if err := resp.Error(); err != nil {
+		return nil, fmt.Errorf("HMGET failed: %w", err)
+	}
+	arr, err := resp.ToArray()
+	if err != nil {
+		return make(map[string][]byte), nil
+	}
+	result := make(map[string][]byte)
+	for i, elem := range arr {
+		if i >= len(fields) {
+			break
+		}
+		b, err := elem.AsBytes()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get map field: %w", err)
+			// nil response means field does not exist — skip
+			continue
 		}
-		if exists {
-			result[field] = value
-		}
+		result[fields[i]] = b
 	}
 	return result, nil
 }
@@ -546,20 +608,44 @@ func (c *Client) IncrementMapField(ctx context.Context, key, field string, amoun
 	return value, nil
 }
 
-func (c *Client) PopSet(ctx context.Context, key string, count int64) ([]string, error) {
+func (c *Client) PopSet(ctx context.Context, key string, count int64) ([][]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Spop().Key(key).Count(count).Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("SPOP failed: %w", err)
 	}
-	return resp.AsStrSlice()
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
-func (c *Client) GetRandomSetMember(ctx context.Context, key string, count int64) ([]string, error) {
+func (c *Client) GetRandomSetMember(ctx context.Context, key string, count int64) ([][]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Srandmember().Key(key).Count(count).Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("SRANDMEMBER failed: %w", err)
 	}
-	return resp.AsStrSlice()
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 // KeysByPattern retrieves all keys matching the given pattern.
@@ -628,38 +714,55 @@ func (c *Client) ListMapFieldNames(ctx context.Context, key string) ([]string, e
 }
 
 // ListMapFieldValues gets all field values in a hash.
-func (c *Client) ListMapFieldValues(ctx context.Context, key string) ([]string, error) {
+func (c *Client) ListMapFieldValues(ctx context.Context, key string) ([][]byte, error) {
 	resp := c.client.Do(ctx, c.client.B().Hvals().Key(key).Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("HVALS failed: %w", err)
 	}
-	return resp.AsStrSlice()
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 // GetMapFieldsMultiple gets multiple fields from a hash at once.
-func (c *Client) GetMapFieldsMultiple(ctx context.Context, key string, fields []string) (map[string]string, error) {
+func (c *Client) GetMapFieldsMultiple(ctx context.Context, key string, fields []string) (map[string][]byte, error) {
 	builder := c.client.B().Hmget().Key(key).Field(fields...)
 	resp := c.client.Do(ctx, builder.Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("HMGET failed: %w", err)
 	}
 
-	values, err := resp.AsStrSlice()
+	arr, err := resp.ToArray()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse HMGET response: %w", err)
+		return make(map[string][]byte), nil
 	}
-
-	result := make(map[string]string)
-	for i, field := range fields {
-		if i < len(values) && values[i] != "" {
-			result[field] = values[i]
+	result := make(map[string][]byte)
+	for i, elem := range arr {
+		if i >= len(fields) {
+			break
 		}
+		b, err := elem.AsBytes()
+		if err != nil {
+			// nil response means field does not exist — skip
+			continue
+		}
+		result[fields[i]] = b
 	}
 	return result, nil
 }
 
 // SetIntersection gets the intersection of multiple sets.
-func (c *Client) SetIntersection(ctx context.Context, keys []string) ([]string, error) {
+func (c *Client) SetIntersection(ctx context.Context, keys []string) ([][]byte, error) {
 	builder := c.client.B().Sinter().Key(keys[0])
 	if len(keys) > 1 {
 		builder = builder.Key(keys[1:]...)
@@ -668,11 +771,23 @@ func (c *Client) SetIntersection(ctx context.Context, keys []string) ([]string, 
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("SINTER failed: %w", err)
 	}
-	return resp.AsStrSlice()
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 // SetUnion gets the union of multiple sets.
-func (c *Client) SetUnion(ctx context.Context, keys []string) ([]string, error) {
+func (c *Client) SetUnion(ctx context.Context, keys []string) ([][]byte, error) {
 	builder := c.client.B().Sunion().Key(keys[0])
 	if len(keys) > 1 {
 		builder = builder.Key(keys[1:]...)
@@ -681,11 +796,23 @@ func (c *Client) SetUnion(ctx context.Context, keys []string) ([]string, error) 
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("SUNION failed: %w", err)
 	}
-	return resp.AsStrSlice()
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 // SetDifference gets the difference of sets.
-func (c *Client) SetDifference(ctx context.Context, firstKey string, otherKeys []string) ([]string, error) {
+func (c *Client) SetDifference(ctx context.Context, firstKey string, otherKeys []string) ([][]byte, error) {
 	builder := c.client.B().Sdiff().Key(firstKey)
 	for _, key := range otherKeys {
 		builder = builder.Key(key)
@@ -694,7 +821,19 @@ func (c *Client) SetDifference(ctx context.Context, firstKey string, otherKeys [
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("SDIFF failed: %w", err)
 	}
-	return resp.AsStrSlice()
+	arr, err := resp.ToArray()
+	if err != nil {
+		return [][]byte{}, nil
+	}
+	result := make([][]byte, 0, len(arr))
+	for _, elem := range arr {
+		b, err := elem.AsBytes()
+		if err != nil {
+			continue
+		}
+		result = append(result, b)
+	}
+	return result, nil
 }
 
 // AddStream adds an entry to a stream.
@@ -710,8 +849,36 @@ func (c *Client) AddStream(ctx context.Context, key string, id string, fields ma
 	return resp.ToString()
 }
 
+// parseStreamEntry parses a single stream entry from the raw Valkey response element.
+// It is shared between GetStreamRange and ReadStream.
+func parseStreamEntry(entryElem valkey.ValkeyMessage) (StreamEntry, error) {
+	entryArr, err := entryElem.ToArray()
+	if err != nil || len(entryArr) < 2 {
+		return StreamEntry{}, fmt.Errorf("invalid stream entry format")
+	}
+	id, err := entryArr[0].ToString()
+	if err != nil {
+		return StreamEntry{}, fmt.Errorf("invalid stream entry ID")
+	}
+	// In RESP3, stream entry field-values are returned as a MAP type (%),
+	// not a flat array. AsMap handles both RESP2 (flat array) and RESP3 (map) formats.
+	fieldMap, err := entryArr[1].AsMap()
+	if err != nil {
+		return StreamEntry{}, fmt.Errorf("invalid stream entry fields")
+	}
+	fields := make(map[string][]byte, len(fieldMap))
+	for fieldName, fieldMsg := range fieldMap {
+		fieldVal, err := fieldMsg.AsBytes()
+		if err != nil {
+			continue
+		}
+		fields[fieldName] = fieldVal
+	}
+	return StreamEntry{ID: id, FieldValues: fields}, nil
+}
+
 // GetStreamRange gets entries from a stream within a range.
-func (c *Client) GetStreamRange(ctx context.Context, key string, start string, end string, count int64) ([]map[string]string, error) {
+func (c *Client) GetStreamRange(ctx context.Context, key string, start string, end string, count int64) ([]StreamEntry, error) {
 	endBuilder := c.client.B().Xrange().Key(key).Start(start).End(end)
 	var resp valkey.ValkeyResult
 	if count > 0 {
@@ -723,18 +890,18 @@ func (c *Client) GetStreamRange(ctx context.Context, key string, start string, e
 		return nil, fmt.Errorf("XRANGE failed: %w", err)
 	}
 
-	// Parse stream entries
-	entries, err := resp.AsXRange()
+	// XRANGE raw format: [ [id, [f1, v1, f2, v2, ...]], ... ]
+	arr, err := resp.ToArray()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse XRANGE response: %w", err)
+		return []StreamEntry{}, nil
 	}
-	result := make([]map[string]string, 0)
-	for _, entry := range entries {
-		fieldMap := make(map[string]string)
-		for k, v := range entry.FieldValues {
-			fieldMap[k] = v
+	result := make([]StreamEntry, 0, len(arr))
+	for _, entryElem := range arr {
+		entry, err := parseStreamEntry(entryElem)
+		if err != nil {
+			continue
 		}
-		result = append(result, fieldMap)
+		result = append(result, entry)
 	}
 	return result, nil
 }
@@ -749,27 +916,64 @@ func (c *Client) GetStreamLength(ctx context.Context, key string) (int64, error)
 }
 
 // ReadStream reads entries from a stream.
-func (c *Client) ReadStream(ctx context.Context, key string, id string, count int64) ([]map[string]string, error) {
-	builder := c.client.B().Xread().Streams().Key(key).Id(id)
+// XREAD response format differs between RESP2 and RESP3:
+//   - RESP2: [ [stream_key, [ [id, [fields...]], ... ]] ]  (outer array of pairs)
+//   - RESP3: { stream_key: [ [id, [fields...]], ... ] }    (outer map)
+func (c *Client) ReadStream(ctx context.Context, key string, id string, count int64) ([]StreamEntry, error) {
+	var resp valkey.ValkeyResult
 	if count > 0 {
-		builder = c.client.B().Xread().Count(count).Streams().Key(key).Id(id)
+		resp = c.client.Do(ctx, c.client.B().Xread().Count(count).Streams().Key(key).Id(id).Build())
+	} else {
+		resp = c.client.Do(ctx, c.client.B().Xread().Streams().Key(key).Id(id).Build())
 	}
-	resp := c.client.Do(ctx, builder.Build())
 	if err := resp.Error(); err != nil {
 		return nil, fmt.Errorf("XREAD failed: %w", err)
 	}
 
-	entries, err := resp.AsXRange()
+	msg, err := resp.ToMessage()
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse XREAD response: %w", err)
+		return []StreamEntry{}, nil
 	}
-	result := make([]map[string]string, 0)
-	for _, entry := range entries {
-		fieldMap := make(map[string]string)
-		for k, v := range entry.FieldValues {
-			fieldMap[k] = v
+
+	result := make([]StreamEntry, 0)
+
+	parseEntries := func(entriesMsg valkey.ValkeyMessage) {
+		entriesArr, err := entriesMsg.ToArray()
+		if err != nil {
+			return
 		}
-		result = append(result, fieldMap)
+		for _, entryElem := range entriesArr {
+			entry, err := parseStreamEntry(entryElem)
+			if err != nil {
+				continue
+			}
+			result = append(result, entry)
+		}
+	}
+
+	if msg.IsMap() {
+		// RESP3: outer is a MAP { stream_name: entries_array }
+		outerMap, err := msg.AsMap()
+		if err != nil {
+			return []StreamEntry{}, nil
+		}
+		for _, entriesMsg := range outerMap {
+			parseEntries(entriesMsg)
+		}
+		return result, nil
+	}
+
+	// RESP2: outer is [ [stream_key, entries_array], ... ]
+	outerArr, err := msg.ToArray()
+	if err != nil || len(outerArr) == 0 {
+		return []StreamEntry{}, nil
+	}
+	for _, streamElem := range outerArr {
+		streamArr, err := streamElem.ToArray()
+		if err != nil || len(streamArr) < 2 {
+			continue
+		}
+		parseEntries(streamArr[1])
 	}
 	return result, nil
 }

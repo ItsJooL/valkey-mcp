@@ -12,10 +12,10 @@ import (
 
 func TestXRangeStream_Execute_Success(t *testing.T) {
 	mockClient := &client.MockValkeyClient{}
-	mockClient.GetStreamRangeFunc = func(ctx context.Context, key, start, end string, count int64) ([]map[string]string, error) {
-		return []map[string]string{
-			{"name": "alice", "age": "30"},
-			{"name": "bob", "age": "25"},
+	mockClient.GetStreamRangeFunc = func(ctx context.Context, key, start, end string, count int64) ([]client.StreamEntry, error) {
+		return []client.StreamEntry{
+			{ID: "1-0", FieldValues: map[string][]byte{"name": []byte("alice"), "age": []byte("30")}},
+			{ID: "2-0", FieldValues: map[string][]byte{"name": []byte("bob"), "age": []byte("25")}},
 		}, nil
 	}
 
@@ -41,11 +41,11 @@ func TestXRangeStream_Execute_Success(t *testing.T) {
 
 func TestXRangeStream_Execute_WithIDRange(t *testing.T) {
 	mockClient := &client.MockValkeyClient{}
-	mockClient.GetStreamRangeFunc = func(ctx context.Context, key, start, end string, count int64) ([]map[string]string, error) {
+	mockClient.GetStreamRangeFunc = func(ctx context.Context, key, start, end string, count int64) ([]client.StreamEntry, error) {
 		assert.Equal(t, "1609459200000-0", start)
 		assert.Equal(t, "1609459200000-100", end)
-		return []map[string]string{
-			{"value": "test"},
+		return []client.StreamEntry{
+			{ID: "1609459200000-0", FieldValues: map[string][]byte{"value": []byte("test")}},
 		}, nil
 	}
 
@@ -123,8 +123,8 @@ func TestXRangeStream_Execute_EmptyEnd(t *testing.T) {
 
 func TestXRangeStream_Execute_NoEntries(t *testing.T) {
 	mockClient := &client.MockValkeyClient{}
-	mockClient.GetStreamRangeFunc = func(ctx context.Context, key, start, end string, count int64) ([]map[string]string, error) {
-		return []map[string]string{}, nil
+	mockClient.GetStreamRangeFunc = func(ctx context.Context, key, start, end string, count int64) ([]client.StreamEntry, error) {
+		return []client.StreamEntry{}, nil
 	}
 
 	tool := NewTool(mockClient)

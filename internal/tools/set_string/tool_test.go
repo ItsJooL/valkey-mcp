@@ -33,7 +33,7 @@ func TestSetStringTool_Execute_Success(t *testing.T) {
 	// Verify the value was actually set
 	val, exists, _ := mockClient.GetString(ctx, "test_key")
 	assert.True(t, exists)
-	assert.Equal(t, "test_value", val)
+	assert.Equal(t, "test_value", string(val))
 }
 
 func TestSetStringTool_Execute_WithTTL(t *testing.T) {
@@ -105,7 +105,7 @@ func TestSetStringTool_Execute_NX_Fail(t *testing.T) {
 
 	// Verify old value unchanged
 	val, _, _ := mockClient.GetString(ctx, "existing_key")
-	assert.Equal(t, "old_value", val)
+	assert.Equal(t, "old_value", string(val))
 }
 
 func TestSetStringTool_Execute_EmptyKey(t *testing.T) {

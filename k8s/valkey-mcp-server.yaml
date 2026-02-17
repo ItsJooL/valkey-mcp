@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
       - name: valkey-mcp-server
-        image: ghcr.io/itsjool/valkey-mcp-server:1.0.1
+        image: ghcr.io/itsjool/valkey-mcp-server:1.0.2
         imagePullPolicy: IfNotPresent
         args:
         - "-transport=http"

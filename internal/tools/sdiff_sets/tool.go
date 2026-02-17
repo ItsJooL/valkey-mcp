@@ -20,8 +20,8 @@ type Input struct {
 }
 
 type Output struct {
-	Members []string `json:"members"`
-	Count   int64    `json:"count"`
+	Members []any `json:"members"`
+	Count   int64 `json:"count"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -44,14 +44,14 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 	firstKey := params.Keys[0]
 	otherKeys := params.Keys[1:]
 
-	members, err := t.client.SetDifference(ctx, firstKey, otherKeys)
+	raw, err := t.client.SetDifference(ctx, firstKey, otherKeys)
 	if err != nil {
 		return nil, fmt.Errorf("set difference operation failed: %w", err)
 	}
 
 	return Output{
-		Members: members,
-		Count:   int64(len(members)),
+		Members: base.SafeSlice(raw),
+		Count:   int64(len(raw)),
 	}, nil
 }
 

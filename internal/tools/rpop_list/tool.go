@@ -25,9 +25,9 @@ type Input struct {
 
 // Output represents the output of rpop_list tool.
 type Output struct {
-	Key      string   `json:"key"`
-	Elements []string `json:"elements"`
-	Count    int      `json:"count"`
+	Key      string `json:"key"`
+	Elements []any  `json:"elements"`
+	Count    int    `json:"count"`
 }
 
 // NewTool creates a new rpop_list tool.
@@ -56,15 +56,15 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		params.Count = 1
 	}
 
-	elements, err := t.client.PopList(ctx, params.Key, params.Count, true)
+	raw, err := t.client.PopList(ctx, params.Key, params.Count, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pop from list %q: %w", params.Key, err)
 	}
 
 	return Output{
 		Key:      params.Key,
-		Elements: elements,
-		Count:    len(elements),
+		Elements: base.SafeSlice(raw),
+		Count:    len(raw),
 	}, nil
 }
 

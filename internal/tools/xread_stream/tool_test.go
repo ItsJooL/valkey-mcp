@@ -12,10 +12,10 @@ import (
 
 func TestXReadStream_Execute_Success(t *testing.T) {
 	mockClient := &client.MockValkeyClient{}
-	mockClient.ReadStreamFunc = func(ctx context.Context, key, id string, count int64) ([]map[string]string, error) {
-		return []map[string]string{
-			{"message": "hello"},
-			{"message": "world"},
+	mockClient.ReadStreamFunc = func(ctx context.Context, key, id string, count int64) ([]client.StreamEntry, error) {
+		return []client.StreamEntry{
+			{ID: "1-0", FieldValues: map[string][]byte{"message": []byte("hello")}},
+			{ID: "2-0", FieldValues: map[string][]byte{"message": []byte("world")}},
 		}, nil
 	}
 
@@ -40,10 +40,10 @@ func TestXReadStream_Execute_Success(t *testing.T) {
 
 func TestXReadStream_Execute_WithSpecificID(t *testing.T) {
 	mockClient := &client.MockValkeyClient{}
-	mockClient.ReadStreamFunc = func(ctx context.Context, key, id string, count int64) ([]map[string]string, error) {
+	mockClient.ReadStreamFunc = func(ctx context.Context, key, id string, count int64) ([]client.StreamEntry, error) {
 		assert.Equal(t, "1609459200000-0", id)
-		return []map[string]string{
-			{"data": "test"},
+		return []client.StreamEntry{
+			{ID: "1609459200000-0", FieldValues: map[string][]byte{"data": []byte("test")}},
 		}, nil
 	}
 
@@ -102,8 +102,8 @@ func TestXReadStream_Execute_EmptyID(t *testing.T) {
 
 func TestXReadStream_Execute_NoEntries(t *testing.T) {
 	mockClient := &client.MockValkeyClient{}
-	mockClient.ReadStreamFunc = func(ctx context.Context, key, id string, count int64) ([]map[string]string, error) {
-		return []map[string]string{}, nil
+	mockClient.ReadStreamFunc = func(ctx context.Context, key, id string, count int64) ([]client.StreamEntry, error) {
+		return []client.StreamEntry{}, nil
 	}
 
 	tool := NewTool(mockClient)

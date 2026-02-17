@@ -22,9 +22,9 @@ type Input struct {
 }
 
 type Output struct {
-	Key    string            `json:"key"`
-	Fields map[string]string `json:"fields"`
-	Count  int               `json:"count"`
+	Key    string         `json:"key"`
+	Fields map[string]any `json:"fields"`
+	Count  int            `json:"count"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -42,11 +42,11 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 	if params.Key == "" {
 		return nil, fmt.Errorf("key cannot be empty")
 	}
-	fields, err := t.client.GetMapFields(ctx, params.Key, params.Fields)
+	raw, err := t.client.GetMapFields(ctx, params.Key, params.Fields)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hash fields: %w", err)
 	}
-	return Output{Key: params.Key, Fields: fields, Count: len(fields)}, nil
+	return Output{Key: params.Key, Fields: base.SafeMap(raw), Count: len(raw)}, nil
 }
 
 func Init(reg *registry.ToolRegistry, client client.ValkeyClient) {

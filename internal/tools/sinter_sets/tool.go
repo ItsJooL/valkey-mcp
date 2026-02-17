@@ -20,8 +20,8 @@ type Input struct {
 }
 
 type Output struct {
-	Members []string `json:"members"`
-	Count   int64    `json:"count"`
+	Members []any `json:"members"`
+	Count   int64 `json:"count"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -41,14 +41,14 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("keys cannot be empty")
 	}
 
-	members, err := t.client.SetIntersection(ctx, params.Keys)
+	raw, err := t.client.SetIntersection(ctx, params.Keys)
 	if err != nil {
 		return nil, fmt.Errorf("set intersection operation failed: %w", err)
 	}
 
 	return Output{
-		Members: members,
-		Count:   int64(len(members)),
+		Members: base.SafeSlice(raw),
+		Count:   int64(len(raw)),
 	}, nil
 }
 

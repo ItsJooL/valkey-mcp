@@ -24,10 +24,10 @@ type Input struct {
 
 // Output represents the output of get_set_members tool.
 type Output struct {
-	Key         string   `json:"key"`
-	Members     []string `json:"members"`
-	MemberCount int      `json:"member_count"`
-	Exists      bool     `json:"exists"`
+	Key         string `json:"key"`
+	Members     []any  `json:"members"`
+	MemberCount int    `json:"member_count"`
+	Exists      bool   `json:"exists"`
 }
 
 // NewTool creates a new get_set_members tool.
@@ -52,16 +52,16 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("key cannot be empty")
 	}
 
-	members, err := t.client.ListSetMembers(ctx, params.Key)
+	raw, err := t.client.ListSetMembers(ctx, params.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get set members for key %q: %w", params.Key, err)
 	}
 
 	return Output{
 		Key:         params.Key,
-		Members:     members,
-		MemberCount: len(members),
-		Exists:      len(members) > 0,
+		Members:     base.SafeSlice(raw),
+		MemberCount: len(raw),
+		Exists:      len(raw) > 0,
 	}, nil
 }
 

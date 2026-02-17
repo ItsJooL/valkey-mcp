@@ -24,10 +24,10 @@ type Input struct {
 
 // Output represents the output of get_hash tool.
 type Output struct {
-	Key        string            `json:"key"`
-	Fields     map[string]string `json:"fields"`
-	FieldCount int               `json:"field_count"`
-	Exists     bool              `json:"exists"`
+	Key        string         `json:"key"`
+	Fields     map[string]any `json:"fields"`
+	FieldCount int            `json:"field_count"`
+	Exists     bool           `json:"exists"`
 }
 
 // NewTool creates a new get_hash tool.
@@ -52,16 +52,16 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("key cannot be empty")
 	}
 
-	fields, err := t.client.GetMap(ctx, params.Key)
+	raw, err := t.client.GetMap(ctx, params.Key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hash for key %q: %w", params.Key, err)
 	}
 
 	return Output{
 		Key:        params.Key,
-		Fields:     fields,
-		FieldCount: len(fields),
-		Exists:     len(fields) > 0,
+		Fields:     base.SafeMap(raw),
+		FieldCount: len(raw),
+		Exists:     len(raw) > 0,
 	}, nil
 }
 

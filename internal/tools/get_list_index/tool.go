@@ -27,7 +27,7 @@ type Input struct {
 type Output struct {
 	Key    string `json:"key"`
 	Index  int64  `json:"index"`
-	Value  string `json:"value"`
+	Value  any    `json:"value"`
 	Exists bool   `json:"exists"`
 }
 
@@ -53,23 +53,15 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("key cannot be empty")
 	}
 
-	// Use LRANGE with same index as start and stop to get single element
-	elements, err := t.client.GetListRange(ctx, params.Key, params.Index, params.Index)
+	raw, exists, err := t.client.GetListIndex(ctx, params.Key, params.Index)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list element for key %q: %w", params.Key, err)
-	}
-
-	value := ""
-	exists := false
-	if len(elements) > 0 {
-		value = elements[0]
-		exists = true
 	}
 
 	return Output{
 		Key:    params.Key,
 		Index:  params.Index,
-		Value:  value,
+		Value:  base.SafeValue(raw),
 		Exists: exists,
 	}, nil
 }

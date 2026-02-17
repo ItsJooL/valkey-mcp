@@ -22,9 +22,9 @@ type Input struct {
 }
 
 type Output struct {
-	Key     string   `json:"key"`
-	Members []string `json:"members"`
-	Count   int      `json:"count"`
+	Key     string `json:"key"`
+	Members []any  `json:"members"`
+	Count   int    `json:"count"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -45,11 +45,11 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 	if params.Count == 0 {
 		params.Count = 1
 	}
-	members, err := t.client.PopSet(ctx, params.Key, params.Count)
+	raw, err := t.client.PopSet(ctx, params.Key, params.Count)
 	if err != nil {
 		return nil, fmt.Errorf("failed to pop from set: %w", err)
 	}
-	return Output{Key: params.Key, Members: members, Count: len(members)}, nil
+	return Output{Key: params.Key, Members: base.SafeSlice(raw), Count: len(raw)}, nil
 }
 
 func Init(reg *registry.ToolRegistry, client client.ValkeyClient) {

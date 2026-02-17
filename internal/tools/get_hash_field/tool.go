@@ -27,7 +27,7 @@ type Input struct {
 type Output struct {
 	Key    string `json:"key"`
 	Field  string `json:"field"`
-	Value  string `json:"value"`
+	Value  any    `json:"value"`
 	Exists bool   `json:"exists"`
 }
 
@@ -56,7 +56,7 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 		return nil, fmt.Errorf("field cannot be empty")
 	}
 
-	value, exists, err := t.client.GetMapField(ctx, params.Key, params.Field)
+	raw, exists, err := t.client.GetMapField(ctx, params.Key, params.Field)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hash field for key %q: %w", params.Key, err)
 	}
@@ -64,7 +64,7 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 	return Output{
 		Key:    params.Key,
 		Field:  params.Field,
-		Value:  value,
+		Value:  base.SafeValue(raw),
 		Exists: exists,
 	}, nil
 }

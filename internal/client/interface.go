@@ -13,7 +13,7 @@ type ValkeyClient interface {
 	GetServerInfo(ctx context.Context) (map[string]string, error)
 
 	// String operations
-	GetString(ctx context.Context, key string) (string, bool, error)
+	GetString(ctx context.Context, key string) ([]byte, bool, error)
 	SetString(ctx context.Context, key, value string, ttlSeconds *int64, nx, xx bool) (bool, error)
 	DeleteKey(ctx context.Context, key string) (bool, error)
 	ExistsKeys(ctx context.Context, keys []string) (map[string]bool, error)
@@ -24,13 +24,13 @@ type ValkeyClient interface {
 	IncrementNumber(ctx context.Context, key string, amount int64) (int64, error)
 	DecrementNumber(ctx context.Context, key string, amount int64) (int64, error)
 	AppendString(ctx context.Context, key, value string) (int64, error)
-	GetRange(ctx context.Context, key string, start, end int64) (string, error)
+	GetRange(ctx context.Context, key string, start, end int64) ([]byte, error)
 
 	// Hash (map) operations
-	GetMap(ctx context.Context, key string) (map[string]string, error)
+	GetMap(ctx context.Context, key string) (map[string][]byte, error)
 	SetMap(ctx context.Context, key string, fields map[string]string) (int64, error)
-	GetMapField(ctx context.Context, key, field string) (string, bool, error)
-	GetMapFields(ctx context.Context, key string, fields []string) (map[string]string, error)
+	GetMapField(ctx context.Context, key, field string) ([]byte, bool, error)
+	GetMapFields(ctx context.Context, key string, fields []string) (map[string][]byte, error)
 	DeleteMapFields(ctx context.Context, key string, fields []string) (int64, error)
 	ListMapKeys(ctx context.Context, key string) ([]string, error)
 	MapFieldExists(ctx context.Context, key, field string) (bool, error)
@@ -38,20 +38,21 @@ type ValkeyClient interface {
 
 	// List operations
 	PushList(ctx context.Context, key string, values []string, tail bool) (int64, error)
-	PopList(ctx context.Context, key string, count int64, tail bool) ([]string, error)
-	GetListRange(ctx context.Context, key string, start, stop int64) ([]string, error)
+	PopList(ctx context.Context, key string, count int64, tail bool) ([][]byte, error)
+	GetListRange(ctx context.Context, key string, start, stop int64) ([][]byte, error)
 	GetListLength(ctx context.Context, key string) (int64, error)
+	GetListIndex(ctx context.Context, key string, index int64) ([]byte, bool, error)
 	SetListIndex(ctx context.Context, key string, index int64, value string) (bool, error)
 	TrimList(ctx context.Context, key string, start, stop int64) (bool, error)
 
 	// Set operations
 	AddSet(ctx context.Context, key string, members []string) (int64, error)
 	RemoveSet(ctx context.Context, key string, members []string) (int64, error)
-	ListSetMembers(ctx context.Context, key string) ([]string, error)
+	ListSetMembers(ctx context.Context, key string) ([][]byte, error)
 	CheckSetMember(ctx context.Context, key, member string) (bool, error)
 	GetSetSize(ctx context.Context, key string) (int64, error)
-	PopSet(ctx context.Context, key string, count int64) ([]string, error)
-	GetRandomSetMember(ctx context.Context, key string, count int64) ([]string, error)
+	PopSet(ctx context.Context, key string, count int64) ([][]byte, error)
+	GetRandomSetMember(ctx context.Context, key string, count int64) ([][]byte, error)
 
 	// Additional Key operations
 	KeysByPattern(ctx context.Context, pattern string) ([]string, error)
@@ -63,19 +64,19 @@ type ValkeyClient interface {
 	// Additional Hash operations
 	GetMapLength(ctx context.Context, key string) (int64, error)
 	ListMapFieldNames(ctx context.Context, key string) ([]string, error)
-	ListMapFieldValues(ctx context.Context, key string) ([]string, error)
-	GetMapFieldsMultiple(ctx context.Context, key string, fields []string) (map[string]string, error)
+	ListMapFieldValues(ctx context.Context, key string) ([][]byte, error)
+	GetMapFieldsMultiple(ctx context.Context, key string, fields []string) (map[string][]byte, error)
 
 	// Additional Set operations
-	SetIntersection(ctx context.Context, keys []string) ([]string, error)
-	SetUnion(ctx context.Context, keys []string) ([]string, error)
-	SetDifference(ctx context.Context, firstKey string, otherKeys []string) ([]string, error)
+	SetIntersection(ctx context.Context, keys []string) ([][]byte, error)
+	SetUnion(ctx context.Context, keys []string) ([][]byte, error)
+	SetDifference(ctx context.Context, firstKey string, otherKeys []string) ([][]byte, error)
 
 	// Stream operations
 	AddStream(ctx context.Context, key string, id string, fields map[string]string) (string, error)
-	GetStreamRange(ctx context.Context, key string, start string, end string, count int64) ([]map[string]string, error)
+	GetStreamRange(ctx context.Context, key string, start string, end string, count int64) ([]StreamEntry, error)
 	GetStreamLength(ctx context.Context, key string) (int64, error)
-	ReadStream(ctx context.Context, key string, id string, count int64) ([]map[string]string, error)
+	ReadStream(ctx context.Context, key string, id string, count int64) ([]StreamEntry, error)
 
 	// Serialization operations
 	DumpKey(ctx context.Context, key string) ([]byte, error)

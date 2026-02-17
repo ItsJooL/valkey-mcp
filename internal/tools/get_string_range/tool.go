@@ -24,7 +24,7 @@ type Input struct {
 
 type Output struct {
 	Key   string `json:"key"`
-	Value string `json:"value"`
+	Value any    `json:"value"`
 }
 
 func NewTool(client client.ValkeyClient) registry.Tool {
@@ -42,11 +42,11 @@ func (t *Tool) Execute(ctx context.Context, input json.RawMessage) (interface{},
 	if params.Key == "" {
 		return nil, fmt.Errorf("key cannot be empty")
 	}
-	value, err := t.client.GetRange(ctx, params.Key, params.Start, params.End)
+	raw, err := t.client.GetRange(ctx, params.Key, params.Start, params.End)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get string range: %w", err)
 	}
-	return Output{Key: params.Key, Value: value}, nil
+	return Output{Key: params.Key, Value: base.SafeValue(raw)}, nil
 }
 
 func Init(reg *registry.ToolRegistry, client client.ValkeyClient) {
